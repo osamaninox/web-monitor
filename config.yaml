@@ -1,0 +1,2 @@
+web-monitor-scheduler:
+    schedule: "*/2 * * * *" # every 2 minutes
