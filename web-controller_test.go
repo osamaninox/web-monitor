@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"net/http/httptest"
 	"web-monitor/database"
 
@@ -10,12 +9,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
 func runTestServer() *httptest.Server {
-	database.InitDB()
-	server := httptest.NewServer(setupEndpoints())
-	fmt.Println("Server URL", server.URL)
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+	database.InitDB(logger)
+	server := httptest.NewServer(setupEndpoints(logger, database.GetDB()))
 	return server
 }
 

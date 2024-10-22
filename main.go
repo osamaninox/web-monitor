@@ -1,18 +1,19 @@
 package main
 
 import (
-	"fmt"
-	"log"
 	"net/http"
 	"web-monitor/database"
 	webMonitorMetrics "web-monitor/web-monitor-metrics"
 	webUrl "web-monitor/web-url"
 
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 func main() {
-	database.InitDB()
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+	database.InitDB(logger)
 	webUrl.CreateWebUrlTable()
 	webMonitorMetrics.CreateWebMonitorMetricTable()
 
@@ -21,28 +22,21 @@ func main() {
 	viper.AddConfigPath(".")
 	err := viper.ReadInConfig()
 	if err != nil {
-		log.Fatalf("Fatal error config file: %s \n", err)
+		logger.Fatal("Fatal error config file", zap.Error(err))
 	}
 	monitoringProcessInterval := viper.GetString("web-monitor-scheduler.schedule")
-	fmt.Println("Web monitor configuration")
-	fmt.Println("Monitoring Process Schedule:", monitoringProcessInterval)
-	go StartMonitoringScheduler(monitoringProcessInterval)
-	mux := setupEndpoints()
+	logger.Info("Monitoring process interval", zap.String("interval", monitoringProcessInterval))
+
+	controller := webUrl.NewWebController(logger, database.GetDB())
+	mux := setupEndpoints(logger, controller)
+	go StartMonitoringScheduler(monitoringProcessInterval, logger, &controller.WebUrlRepository)
+	serverPort := viper.GetString("server.port")
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    ":" + serverPort,
 		Handler: mux,
 	}
-	fmt.Println("\nServer is running on port 8080")
+	logger.Info("Server started", zap.String("port", serverPort))
 	if err := server.ListenAndServe(); err != nil {
 		panic(err)
 	}
-}
-
-func setupEndpoints() *http.ServeMux {
-	mux := http.NewServeMux()
-	controller := webUrl.WebController{}
-
-	mux.HandleFunc("/web-url", controller.AddWebUrlForMonitoring)
-
-	return mux
 }

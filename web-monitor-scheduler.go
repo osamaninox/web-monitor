@@ -5,25 +5,30 @@ import (
 	webUrl "web-monitor/web-url"
 
 	"github.com/robfig/cron/v3"
+	"go.uber.org/zap"
 )
 
 var scheduledIntervals []int
+var logger *zap.Logger
+var webUrlRepository *webUrl.WebUrlRepository
 
-func StartMonitoringScheduler(monitoringProcessInterval string) {
-	fmt.Println("Starting web monitor scheduler")
+func StartMonitoringScheduler(monitoringProcessInterval string, _logger *zap.Logger, _webUrlRepository *webUrl.WebUrlRepository) {
+	logger = _logger
+	webUrlRepository = _webUrlRepository
+	logger.Info("Starting monitoring scheduler")
 	monitoringProcessCronJob := cron.New()
 	monitoringProcessCronJob.AddFunc(monitoringProcessInterval, startMonitoring)
 	monitoringProcessCronJob.Start()
 }
 
 func startMonitoring() {
-	distinctIntervals, err := webUrl.GetAllDistinctWebUrlIntervals()
+	distinctIntervals, err := webUrlRepository.GetAllDistinctWebUrlIntervals()
 	if err != nil {
-		fmt.Println("Error while fetching web urls", err)
+		logger.Error("Error while fetching distinct intervals", zap.Error(err))
 		return
 	}
 	unscheduledIntervals := getUnscheduledIntervals(distinctIntervals)
-	fmt.Println("Starting monitoring of unscheduled intervals", unscheduledIntervals)
+	logger.Info("Unscheduled intervals", zap.Any("unscheduledIntervals", unscheduledIntervals))
 	scheduleMonitoringCronJobs(unscheduledIntervals)
 }
 
@@ -45,13 +50,13 @@ func getUnscheduledIntervals(distinctIntervals []int) []int {
 
 func scheduleMonitoringCronJobs(intervals []int) {
 	for _, interval := range intervals {
-		fmt.Println("Scheduling cron job for interval", interval)
+		logger.Info("Scheduling monitoring cron job", zap.Int("interval", interval))
 		webUrlsMonitoringCronJob := cron.New()
 		webUrlsMonitoringCronJob.AddFunc(fmt.Sprintf("*/%d * * * *", interval), func() {
-			fmt.Println("Calling web urls")
+			logger.Info("Fetching web urls for interval", zap.Int("interval", interval))
 			webUrls, err := fetchWebUrlsByInterval(interval)
 			if err != nil {
-				fmt.Println("Error while fetching web urls, Retry in the next interval", err)
+				logger.Error("Error while fetching web urls, Retry in the next interval", zap.Error(err))
 				return
 			}
 			CallWebUrls(webUrls)
@@ -62,9 +67,9 @@ func scheduleMonitoringCronJobs(intervals []int) {
 }
 
 func fetchWebUrlsByInterval(interval int) (webUrls []webUrl.WebUrl, err error) {
-	webUrls, err = webUrl.GetWebUrlsByInterval(interval)
+	webUrls, err = webUrlRepository.GetWebUrlsByInterval(interval)
 	if err != nil {
-		fmt.Println("Error while fetching web urls", err)
+		logger.Error("Error while fetching web urls", zap.Error(err))
 		return nil, err
 	}
 	return webUrls, nil

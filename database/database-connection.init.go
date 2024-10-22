@@ -1,16 +1,16 @@
 package database
 
 import (
-	"fmt"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 var db *gorm.DB
 
-func InitDB() {
+func InitDB(logger *zap.Logger) {
 	dsn := "host=postgresdb port=5432 user=postgres dbname=web-monitor-db sslmode=disable password=secretpassword"
 	for i := 0; i < 3; i++ {
 		postgresDb, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
@@ -18,7 +18,7 @@ func InitDB() {
 			db = postgresDb
 			break
 		}
-		fmt.Println("failed to connect database, retrying in 5 seconds", err)
+		logger.Error("Error while connecting to database", zap.Error(err))
 		time.Sleep(5 * time.Second)
 	}
 }

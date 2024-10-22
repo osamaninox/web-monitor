@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"regexp"
@@ -9,6 +8,8 @@ import (
 	"time"
 	webMonitorMetrics "web-monitor/web-monitor-metrics"
 	webUrl "web-monitor/web-url"
+
+	"go.uber.org/zap"
 )
 
 func CallWebUrls(webUrls []webUrl.WebUrl) {
@@ -24,21 +25,21 @@ func CallWebUrls(webUrls []webUrl.WebUrl) {
 }
 
 func monitorWebUrl(webUrl webUrl.WebUrl) {
-	fmt.Println("Monitoring web url", webUrl.Url)
+	logger.Info("Monitoring web url", zap.String("url", webUrl.Url))
 	start := time.Now()
 	httpResponse, err := http.Get(webUrl.Url)
 	if err != nil {
-		fmt.Println("Error while calling web url", err)
+		logger.Error("Error while calling web url", zap.Error(err))
 		recordMetrics(webUrl, 500, 0, false)
 		return
 	}
 	responseTime := time.Since(start)
-	fmt.Println("Time taken to call web url", webUrl, responseTime)
-	fmt.Println("Response status code", httpResponse.StatusCode)
+	logger.Info("Time taken to call web url", zap.String("url", webUrl.Url), zap.Duration("responseTime", responseTime))
+	logger.Info("Response status code", zap.Int("statusCode", httpResponse.StatusCode))
 	defer httpResponse.Body.Close()
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		fmt.Println("Error while reading response body", err)
+		logger.Error("Error while reading response body", zap.Error(err))
 		recordMetrics(webUrl, httpResponse.StatusCode, responseTime, false)
 		return
 	}
@@ -47,21 +48,20 @@ func monitorWebUrl(webUrl webUrl.WebUrl) {
 		return
 	}
 	isRegexPatternMatched := isRegexPatternMatched(*webUrl.RegexPattern, string(responseBody))
-	fmt.Println("Is regex pattern matched", isRegexPatternMatched)
 	recordMetrics(webUrl, httpResponse.StatusCode, responseTime, isRegexPatternMatched)
 }
 
 func isRegexPatternMatched(regexPattern string, body string) bool {
 	matched, err := regexp.MatchString(regexPattern, body)
 	if err != nil {
-		fmt.Println("Invalid regex pattern", err)
+		logger.Error("Error while matching regex pattern", zap.Error(err))
 		return false
 	}
 	return matched
 }
 
 func recordMetrics(webUrl webUrl.WebUrl, responseStatus int, responseTime time.Duration, isRegexPatternMatched bool) {
-	fmt.Println("Recording metrics for web url", webUrl)
+	logger.Info("Recording metrics", zap.String("url", webUrl.Url), zap.Int("responseStatus", responseStatus), zap.Duration("responseTime", responseTime), zap.Bool("isRegexPatternMatched", isRegexPatternMatched))
 	result := webMonitorMetrics.CreateWebMonitorMetric(&webMonitorMetrics.WebMonitorMetric{
 		Url:                   webUrl.Url,
 		ResponseTime:          int(responseTime.Milliseconds()),
@@ -69,6 +69,6 @@ func recordMetrics(webUrl webUrl.WebUrl, responseStatus int, responseTime time.D
 		IsRegexPatternMatched: isRegexPatternMatched,
 	})
 	if result.Error != nil {
-		fmt.Println("Error while recording metrics of web url", webUrl.Url, result.Error)
+		logger.Error("Error while recording metrics", zap.Error(result.Error))
 	}
 }

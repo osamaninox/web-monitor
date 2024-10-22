@@ -2,7 +2,7 @@
 
 ## Description
 
-Web Monitor monitors the web urls periodically and record its metrics.
+Web Monitor periodically monitors web URLs and records their metrics.
 
 ## Prerequisites
 

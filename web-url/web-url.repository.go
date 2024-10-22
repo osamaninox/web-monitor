@@ -2,46 +2,51 @@ package web_url
 
 import (
 	"fmt"
-	"web-monitor/database"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
-func CreateWebUrl(webUrl *WebUrl) (result *gorm.DB) {
-	return database.GetDB().Create(webUrl)
+type WebUrlRepository struct {
+	database *gorm.DB
+	logger   *zap.Logger
 }
 
-func GetWebUrls() (groupedWebUrls map[int][]WebUrl, err error) {
+func (webUrlRepository *WebUrlRepository) CreateWebUrl(webUrl *WebUrl) (result *gorm.DB) {
+	return webUrlRepository.database.Create(webUrl)
+}
+
+func (webUrlRepository *WebUrlRepository) GetWebUrls() (groupedWebUrls map[int][]WebUrl, err error) {
 	var webUrls []WebUrl
-	result := database.GetDB().Find(&webUrls)
+	result := webUrlRepository.database.Find(&webUrls)
 	if result.Error != nil {
-		fmt.Println("Error while fetching web urls", result.Error)
+		webUrlRepository.logger.Error("Error while fetching web urls", zap.Error(result.Error))
 		return nil, result.Error
 	}
 	groupedWebUrls = make(map[int][]WebUrl)
 	for _, webUrl := range webUrls {
 		groupedWebUrls[webUrl.Interval] = append(groupedWebUrls[webUrl.Interval], webUrl)
 	}
-	fmt.Println("Grouped web urls", groupedWebUrls)
+	webUrlRepository.logger.Info("Grouped web urls", zap.Any("groupedWebUrls", groupedWebUrls))
 	return groupedWebUrls, nil
 }
 
-func GetAllDistinctWebUrlIntervals() (intervals []int, err error) {
-	result := database.GetDB().Model(&WebUrl{}).Select("DISTINCT interval").Find(&intervals)
+func (webUrlRepository *WebUrlRepository) GetAllDistinctWebUrlIntervals() (intervals []int, err error) {
+	result := webUrlRepository.database.Model(&WebUrl{}).Select("DISTINCT interval").Find(&intervals)
 	if result.Error != nil {
-		fmt.Println("Error while fetching intervals", result.Error)
+		webUrlRepository.logger.Error("Error while fetching intervals", zap.Error(result.Error))
 		return nil, result.Error
 	}
-	fmt.Println("Distinct intervals", intervals)
+	webUrlRepository.logger.Info("Distinct intervals", zap.Any("intervals", intervals))
 	return intervals, nil
 }
 
-func GetWebUrlsByInterval(interval int) (webUrls []WebUrl, err error) {
-	result := database.GetDB().Where("interval = ?", interval).Find(&webUrls)
+func (webUrlRepository *WebUrlRepository) GetWebUrlsByInterval(interval int) (webUrls []WebUrl, err error) {
+	result := webUrlRepository.database.Where("interval = ?", interval).Find(&webUrls)
 	if result.Error != nil {
-		fmt.Println("Error while fetching web urls", result.Error)
+		webUrlRepository.logger.Error("Error while fetching web urls", zap.Error(result.Error))
 		return nil, result.Error
 	}
-	fmt.Println("Web urls for interval", interval, webUrls)
+	webUrlRepository.logger.Info(fmt.Sprintf("Web urls for interval %d", interval), zap.Any("webUrls", webUrls))
 	return webUrls, nil
 }
